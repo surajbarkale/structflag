@@ -15,29 +15,57 @@ type StructToFlagsConverter struct {
 	NameConverterFunc func(string) string
 }
 
-// DefaultStructToFlagsConverter uses "-" for separating words, does not change
-// field names and extracts description from "description" struct tag.
-// Example:
-//  type extra struct {
-// 	WrapLines bool
-// 	Pages     []int
-// }
-// type args struct {
-// 	Debug     bool    `description:"Enable debug mode"`
-// 	InputFile *string `description:"Name of input file"`
-// 	Extra     *extra
-// }
-// a := &args{}
-// for name, value := range DefaultStructToFlagsConverter.Convert(&a) {
-// 	flag.Var(value, name, value.Description())
-// }
-// flag.Parse()
-var DefaultStructToFlagsConverter = &StructToFlagsConverter{
-	WordSeparator:     "-",
-	DescriptionTag:    "description",
-	NameConverterFunc: func(s string) string { return s },
+/*
+NewStructToFlagsConverter returns a new converter that uses "-" for separating words,
+does not change field names and extracts description from "description" struct tag. The
+returned instance can be customized by changing fields. It can be used with flags
+package like this:
+	package main
+
+	import (
+		"flag"
+
+		"github.com/surajbarkale/structflag"
+	)
+
+	type extra struct {
+		WrapLines bool
+		Pages     []int
+	}
+	type args struct {
+		Debug     bool    `description:"Enable debug mode"`
+		InputFile *string `description:"Name of input file"`
+		Extra     *extra
+	}
+
+	func main() {
+		a := &args{Debug: true}
+		for name, value := range structflag.DefaultStructToFlagsConverter.Convert(&a) {
+			flag.Var(value, name, value.Description())
+		}
+		flag.PrintDefaults()
+	}
+
+This program should print output:
+	-Debug
+		Enable debug mode (default true)
+	-Extra-Pages
+
+	-Extra-WrapLines
+			(default false)
+	-InputFile
+		Name of input file
+*/
+func NewStructToFlagsConverter() *StructToFlagsConverter {
+	return &StructToFlagsConverter{
+		WordSeparator:     "-",
+		DescriptionTag:    "description",
+		NameConverterFunc: func(s string) string { return s },
+	}
 }
 
+// Convert generates the flag values compatible with the structure. You must pass a
+// pointer to the value
 func (thiz *StructToFlagsConverter) Convert(input interface{}) map[string]Value {
 	output := map[string]Value{}
 	thiz.reflectStructToFlags("", reflect.ValueOf(input), output)
@@ -45,7 +73,9 @@ func (thiz *StructToFlagsConverter) Convert(input interface{}) map[string]Value 
 }
 
 func (thiz *StructToFlagsConverter) reflectStructToFlags(prefix string, input reflect.Value, output map[string]Value) {
-	input = reflect.Indirect(input)
+	for input.Kind() == reflect.Ptr || input.Kind() == reflect.Interface {
+		input = input.Elem()
+	}
 	inputType := input.Type()
 	for i := 0; i < input.NumField(); i++ {
 		field := input.Field(i)

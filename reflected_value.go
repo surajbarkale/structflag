@@ -56,8 +56,11 @@ func (thiz *reflectedValue) Set(source string) error {
 }
 
 func encodeString(val reflect.Value) string {
+	if !val.IsValid() {
+		return ""
+	}
 	switch val.Kind() {
-	case reflect.Ptr:
+	case reflect.Ptr, reflect.UnsafePointer:
 		if val.IsNil() {
 			return ""
 		}
@@ -67,6 +70,11 @@ func encodeString(val reflect.Value) string {
 		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return fmt.Sprint(val.Interface())
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Interface, reflect.Slice:
+		if val.IsNil() {
+			return ""
+		}
+		fallthrough
 	default:
 		bytes, err := json.Marshal(val.Interface())
 		if err != nil {
